@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <sys/stat.h>
 
 typedef struct {
     int16_t someField[24];
@@ -50,13 +51,13 @@ void getString(int16_t* baseString, char* resString) {
 
 int main(int argc, char** argv) {
     if(argc < 2) {
-        printf("command format:\n   capextractor <firmware name>.pac");
+        printf("Usage:  pacextractor <firmware name>.pac\n");
         exit(EXIT_FAILURE);
     }
     
     int fd = open(argv[1], O_RDONLY);
     if (fd == -1) {
-        printf("file %s is not find", argv[1]);
+        printf("file %s not found\n", argv[1]);
         exit(EXIT_FAILURE);
     }
     
@@ -67,14 +68,14 @@ int main(int argc, char** argv) {
     stat(argv[1], &st);
     int firmwareSize = st.st_size;
     if(firmwareSize < sizeof(PacHeader)) {
-        printf("file %s is not firmware", argv[1]);
+        printf("file %s is not firmware\n", argv[1]);
         exit(EXIT_FAILURE);
     }
     
     PacHeader pacHeader;
     size_t rb =read(fd, &pacHeader, sizeof(PacHeader));
     if(rb <= 0) {
-        printf("Error while parsing PAC header");
+        printf("Error while parsing PAC header\n");
         exit(EXIT_FAILURE);
     }
 
@@ -90,7 +91,7 @@ int main(int argc, char** argv) {
         uint32_t length;
         rb =read(fd, &length, sizeof(uint32_t));
         if(rb <= 0) {
-            printf("Partition header error");
+            printf("Partition header error\n");
             exit(EXIT_FAILURE);
         }
         partHeaders[i] = malloc(length);
@@ -98,7 +99,7 @@ int main(int argc, char** argv) {
         curPos += length;
         rb =read(fd, partHeaders[i], length);
         if(rb <= 0) {
-            printf("Partition header error");
+            printf("Partition header error\n");
             exit(EXIT_FAILURE);
         }
         getString(partHeaders[i]->partitionName, buffer);
@@ -122,15 +123,19 @@ int main(int argc, char** argv) {
             dataSizeLeft -= copyLength;
             rb =read(fd, buffer, copyLength);
             if(rb != copyLength) {
-                printf("Partition image extraction error");
+                printf("Partition image extraction error\n");
                 exit(EXIT_FAILURE);
             }
             rb = write(fd_new, buffer, copyLength);
             if(rb != copyLength) {
-                printf("Partition image extraction error");
+                printf("Partition image extraction error\n");
                 exit(EXIT_FAILURE);
             }
-            printf("\r\t%02d%%", (uint64_t)100 - (uint64_t)100*dataSizeLeft/partHeaders[i]->partitionSize);
+#if defined(__CYGWIN__)
+            printf("\r\t%02llu%%", (uint64_t)100 - (uint64_t)100*dataSizeLeft/partHeaders[i]->partitionSize);
+#else
+            printf("\r\t%02zu%%", (uint64_t)100 - (uint64_t)100*dataSizeLeft/partHeaders[i]->partitionSize);
+#endif
         }
         printf("\n");
         close(fd_new);
